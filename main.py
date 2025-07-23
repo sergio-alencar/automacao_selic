@@ -1,10 +1,12 @@
 # AutomacaoSelic/main.py
 
 import logging
+import traceback
 import config
 from backup_manager import criar_backup
 from selic_processor import buscar_e_calcular_selic
 from excel_updater import atualizar_todas_planilhas
+from email_notifier import enviar_email_de_erro
 
 
 def run():
@@ -46,11 +48,32 @@ def run():
             "Processo abortado devido a falha na criação da cópia de trabalho."
         )
 
-    logging.info("--- PROCESSO FINALIZADO ---")
+    # logging.info("--- PROCESSO FINALIZADO ---")
 
 
 if __name__ == "__main__":
     logging.basicConfig(
-        level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+        level=logging.INFO,
+        format="%(asctime)s - %(levelname)s - %(message)s",
+        filename=config.PATH_ARQUIVO_LOG,
+        filemode="a",
     )
-    run()
+
+    try:
+        run()
+
+    except Exception as e:
+        logging.error("!!!!!! UMA FALHA CRÍTICA OCORREU !!!!!!")
+        logging.error(traceback.format_exc())
+
+        assunto = "ALERTA: Falha na execução do robô atualizador de planilhas Selic"
+        corpo = (
+            "Ocorreu um erro crítico durante a execução do script de atualização da Selic.\n\n"
+            "Por favor, verifique o arquivo de log para mais detalhes.\n\n"
+            "==================== MENSAGEM DE ERRO ====================\n"
+            f"{traceback.format_exc()}"
+        )
+        enviar_email_de_erro(
+            assunto, corpo, config.EMAIL_DESTINATARIO_ALERTA, config.EMAIL_CONFIG
+        )
+        logging.error("===================================================")

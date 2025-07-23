@@ -19,3 +19,14 @@ PATH_DEV_ORIGINAL = Path(
 PATH_DEV_BACKUP_BASE = Path(
     r"C:\Users\Administrator\Desktop\BACKUP - COMPENSACAO\Backups_Desenvolvimento"
 )
+
+EMAIL_CONFIG = {
+    "servidor_smtp": "smtp.gmail.com",
+    "porta": 587,
+    "usuario": "sergio.alencar@msladvocacia.com.br",
+    "senha": "eyhx sxlh dvdq bjan",
+}
+
+EMAIL_DESTINATARIO_ALERTA = "sergio.alencar@msladvocacia.com.br"
+
+PATH_ARQUIVO_LOG = Path(r"C:\Scripts\AutomacaoSelic\execution_log.log")
