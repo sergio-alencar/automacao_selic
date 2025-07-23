@@ -40,7 +40,7 @@ def atualizar_todas_planilhas(pasta_alvo: Path, df_selic: pd.DataFrame, nome_aba
                     nova_aba.cell(row=r_idx + 2, column=c_idx + 1, value=value)
 
             formato_data = "dd/mm/yyyy"
-            formato_numero = "0.00%"
+            formato_numero = "0.00"
 
             for linha in range(4, nova_aba.max_row + 1):
                 nova_aba.cell(row=linha, column=2).number_format = formato_data

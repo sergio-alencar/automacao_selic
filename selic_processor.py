@@ -83,6 +83,7 @@ def buscar_e_calcular_selic():
     )
 
     df_final = pd.concat([linha_mes_atual, df_historico], ignore_index=True)
+    df_final["Selic Acumulada"] = df_final["Selic Acumulada"] / 100
     df_final.rename(columns={"data": "Mês/Ano"}, inplace=True)
 
     logging.info("Cálculo final (padrão Receita Federal) concluído com sucesso.")
