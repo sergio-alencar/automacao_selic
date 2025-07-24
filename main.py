@@ -15,39 +15,31 @@ def run():
     logging.info("=== INICIANDO EXECUÇÃO DA AUTOMAÇÃO GOOGLE DRIVE API ===")
     logging.info("=========================================================")
 
-    config.PATH_LOCAL_TEMP.mkdir(exist_ok=True)
-
     drive_service = gdm.get_drive_service(config.PATH_CREDENTIALS)
     if not drive_service:
-        raise Exception(
-            "Falha na autenticação com Google Drive. Verifique credentials.json."
-        )
+        raise Exception("Falha na autenticação com Google Drive.")
 
     if config.MODO_DESENVOLVIMENTO:
         logging.info("--- EXECUTANDO EM MODO DE DESENVOLVIMENTO ---")
-        id_pasta_origem_drive = config.DRIVE_ID_ORIGINAL_DEV
-        path_backup_local_base = config.PATH_LOCAL_BACKUP_BASE_DEV
+        id_pasta_origem = config.FOLDER_ID_ORIGINAL_DEV
 
     else:
         logging.info("--- EXECUTANDO EM MODO DE PRODUÇÃO ---")
-        id_pasta_origem_drive = config.DRIVE_ID_ORIGINAL_PROD
-        path_backup_local_base = config.PATH_LOCAL_BACKUP_BASE_PROD
+        id_pasta_origem = config.FOLDER_ID_ORIGINAL_PROD
 
     nome_pasta_backup = datetime.now().strftime("%Y.%m.%d_%H%M%S")
-    path_backup_dia_local = path_backup_local_base / nome_pasta_backup
+    path_backup_dia_local = config.PATH_LOCAL_BACKUP_BASE / nome_pasta_backup
     path_backup_dia_local.mkdir(parents=True, exist_ok=True)
     logging.info(f"Pasta de backup local criada em '{path_backup_dia_local}'.")
 
-    arquivos_no_drive = gdm.list_files(drive_service, id_pasta_origem_drive)
+    arquivos_no_drive = gdm.list_files(
+        drive_service, id_pasta_origem, config.SHARED_DRIVE_ID
+    )
     if not arquivos_no_drive:
-        logging.warning(
-            "Nenhum arquivo encontrado na pasta de origem do drive. Finalizando..."
-        )
+        logging.warning("Nenhum arquivo encontrado. Finalizando...")
         return
 
-    logging.info(
-        f"Baixando {len(arquivos_no_drive)} arquivos para a pasta local. Aguarde..."
-    )
+    logging.info(f"Baixando {len(arquivos_no_drive)} arquivos...")
     for arquivo in arquivos_no_drive:
         caminho_local_destino = path_backup_dia_local / arquivo["name"]
         gdm.download_file(drive_service, arquivo["id"], caminho_local_destino)
