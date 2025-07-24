@@ -17,6 +17,7 @@ def buscar_e_calcular_selic():
     for i, period_start in enumerate(date_periods):
         if i + 1 < len(date_periods):
             period_end = date_periods[i + 1] - pd.Timedelta(days=1)
+
         else:
             period_end = end_date
         data_inicial_str = period_start.strftime("%d/%m/%Y")
@@ -25,13 +26,16 @@ def buscar_e_calcular_selic():
         logging.info(
             f"Buscando lote de dados: {data_inicial_str} a {data_final_str}..."
         )
+
         try:
             headers = {"Accept": "application/json", "User-Agent": "Mozilla/5.0"}
             response = requests.get(url_api, headers=headers)
             response.raise_for_status()
             dados_lote = response.json()
+
             if dados_lote:
                 all_dataframes.append(pd.DataFrame(dados_lote))
+
         except requests.exceptions.RequestException as e:
             logging.error(
                 f"FALHA ao buscar o lote {data_inicial_str}-{data_final_str}: {e}"
@@ -51,7 +55,7 @@ def buscar_e_calcular_selic():
     df_diario["fator_diario"] = 1 + (df_diario["valor"] / 100)
 
     df_fatores_mensais = (
-        df_diario.groupby(pd.Grouper(key="data", freq="ME"))["fator_diario"]
+        df_diario.groupby(pd.Grouper(key="data", freq="MS"))["fator_diario"]
         .prod()
         .reset_index()
     )

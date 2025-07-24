@@ -16,24 +16,37 @@ def get_drive_service(path_credentials):
 
 def list_files(service, parent_folder_id, shared_drive_id):
     try:
+        all_files = []
+        page_token = None
         query = f"'{parent_folder_id}' in parents and (mimeType='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' or mimeType='application/vnd.ms-excel.sheet.macroEnabled.12')"
-        results = (
-            service.files()
-            .list(
-                q=query,
-                corpora="drive",
-                driveId=shared_drive_id,
-                includeItemsFromAllDrives=True,
-                supportsAllDrives=True,
-                fields="files(id, name)",
+
+        while True:
+            results = (
+                service.files()
+                .list(
+                    q=query,
+                    corpora="drive",
+                    driveId=shared_drive_id,
+                    includeItemsFromAllDrives=True,
+                    supportsAllDrives=True,
+                    fields="nextPageToken, files(id, name)",
+                    pageSize=1000,
+                    pageToken=page_token,
+                )
+                .execute()
             )
-            .execute()
-        )
-        items = results.get("files", [])
+
+            items = results.get("files", [])
+            all_files.extend(items)
+
+            page_token = results.get("nextPageToken", None)
+            if page_token is None:
+                break
+
         logging.info(
-            f"Encontrados {len(items)} arquivos na pasta de origem do Google Drive."
+            f"Encontrados {len(all_files)} arquivos na pasta de origem do Google Drive."
         )
-        return items
+        return all_files
 
     except Exception as e:
         logging.error(
