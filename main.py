@@ -55,31 +55,18 @@ def run():
         gdm.download_file(drive_service, arquivo["id"], caminho_local_destino)
     logging.info("Download de todos os arquivos concluído.")
 
-
     df_selic_calculada = buscar_e_calcular_selic()
     if df_selic_calculada is None:
-         raise Exception("Busca de dados da Selic falhou.")
+        raise Exception("Busca de dados da Selic falhou.")
 
     atualizar_todas_planilhas(
-            pasta_alvo=path_backup_dia_local,
-            df_selic=df_selic_calculada,
-            nome_aba=config.NOME_ABA_SELIC,
+        pasta_alvo=path_backup_dia_local,
+        df_selic=df_selic_calculada,
+        nome_aba=config.NOME_ABA_SELIC,
     )
 
-    logging.info("=== EXECUÇÃO CONCLUÍDA COM SUCESsO ===")
-    logging.info(
-        f"As planilhas modificadas estão na pasta: '{path_backup_dia_local}'"
-    )
-
-        else:
-            logging.error(
-                "Processo interrompido porque a busca de dados da Selic falhou."
-            )
-
-    else:
-        logging.error(
-            "Processo abortado devido a falha na criação da cópia de trabalho."
-        )
+    logging.info("=== EXECUÇÃO CONCLUÍDA COM SUCESSO ===")
+    logging.info(f"As planilhas modificadas estão na pasta: '{path_backup_dia_local}'")
 
 
 if __name__ == "__main__":
