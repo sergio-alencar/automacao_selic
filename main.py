@@ -26,7 +26,7 @@ def run():
     if config.MODO_DESENVOLVIMENTO:
         logging.info("--- EXECUTANDO EM MODO DE DESENVOLVIMENTO ---")
         id_pasta_origem_drive = config.DRIVE_ID_ORIGINAL_DEV
-        path_backup_local_base = config.PATH_LOCAL_BACKUP_ORIGINAL_DEV
+        path_backup_local_base = config.PATH_LOCAL_BACKUP_BASE_DEV
 
     else:
         logging.info("--- EXECUTANDO EM MODO DE PRODUÇÃO ---")
@@ -71,8 +71,10 @@ if __name__ == "__main__":
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s - %(levelname)s - %(message)s",
-        filename=config.PATH_ARQUIVO_LOG,
-        filemode="a",
+        handlers=[
+            logging.FileHandler(config.PATH_ARQUIVO_LOG, mode="a"),
+            logging.StreamHandler(),
+        ],
     )
 
     try:
