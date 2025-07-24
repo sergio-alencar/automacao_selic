@@ -1,10 +1,8 @@
 # AutomacaoSelic/main.py
 
 import logging
-from syslog import LOG_FTP
 import traceback
 import config
-import os
 from datetime import datetime
 import google_drive_manager as gdm
 from selic_processor import buscar_e_calcular_selic
