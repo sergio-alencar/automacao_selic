@@ -14,7 +14,7 @@ PATH_PROD_BACKUP_BASE = Path(
 )
 
 PATH_DEV_ORIGINAL = Path(
-    r"C:\Users\Administrator\Desktop\BACKUP - COMPENSACAO\CONTROLES PADRONIZADOS - 250723"
+    r"G:\Drives compartilhados\Contabil\CLIENTES\RCT\EM COMPENSACAO\0-CONTROLES DE COMPENSACOES\CONTROLES PADRONIZADOS"
 )
 PATH_DEV_BACKUP_BASE = Path(
     r"C:\Users\Administrator\Desktop\BACKUP - COMPENSACAO\Backups_Desenvolvimento"

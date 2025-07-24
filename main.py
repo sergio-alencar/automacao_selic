@@ -48,8 +48,6 @@ def run():
             "Processo abortado devido a falha na criação da cópia de trabalho."
         )
 
-    # logging.info("--- PROCESSO FINALIZADO ---")
-
 
 if __name__ == "__main__":
     logging.basicConfig(
