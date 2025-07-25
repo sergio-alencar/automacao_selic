@@ -34,7 +34,10 @@ def houve_atualizacao_selic(df_selic_novo):
             return True
 
         df_selic_antigo = pd.read_excel(
-            primeiro_arquivo_antigo, sheet_name=config.NOME_ABA_SELIC, skiprows=2
+            primeiro_arquivo_antigo,
+            sheet_name=config.NOME_ABA_SELIC,
+            skiprows=2,
+            usecols="B:C",
         )
         df_selic_antigo.columns = ["Mês/Ano", "Selic Acumulada"]
         df_selic_novo.columns = ["Mês/Ano", "Selic Acumulada"]
