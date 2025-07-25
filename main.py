@@ -2,7 +2,11 @@
 
 import logging
 import traceback
+
+from django import conf
 import config
+import pandas as pd
+import os
 from datetime import datetime
 import google_drive_manager as gdm
 from selic_processor import buscar_e_calcular_selic
@@ -21,51 +25,126 @@ def setup_logging():
     )
 
 
+def houve_atualizacao_selic(df_selic_novo):
+    try:
+        pastas_backup = sorted(
+            [p for p in config.PATH_LOCAL_BACKUP_PURO.iterdir() if p.is_dir()],
+            key=os.path.getmtime,
+            reverse=True,
+        )
+
+        if not pastas_backup:
+            logging.info(
+                "Nenhum backup anterior encontrado. Prosseguindo com a primeira execução."
+            )
+            return True
+
+        path_ultimo_backup = pastas_backup[0]
+        logging.info(
+            f"Verificando atualizações em relação ao último backup: {path_ultimo_backup.name}"
+        )
+
+        primeiro_arquivo_antigo = next(path_ultimo_backup.glob("*.xls*"), None)
+        if not primeiro_arquivo_antigo:
+            logging.warning(
+                "Última pasta de backup está vazia. Considerando que há atualização."
+            )
+            return True
+
+        df_selic_antigo = pd.read_excel(
+            primeiro_arquivo_antigo, sheet_name=config.NOME_ABA_SELIC, skiprows=2
+        )
+        df_selic_antigo.rename(
+            columns={"Mês/Ano": "Mês/Ano", "Selic Acumulada": "Selic Acumulada"},
+            inplace=True,
+        )
+
+        if df_selic_novo.round(6).equals(df_selic_antigo.round(6)):
+            logging.warning(
+                "VERIFICAÇÃO: Nenhuma atualização nos dados da Selic foi encontrada."
+            )
+            return False
+
+        else:
+            logging.info(
+                "VERIFICAÇÃO: Novos dados da Selic encontrados. A atualização irá continuar."
+            )
+            return True
+
+    except Exception as e:
+        logging.error(
+            f"Erro ao verificar atualizações: {e}. Prosseguindo com a atualização por segurança."
+        )
+
+
 def run():
     logging.info("=========================================================")
-    logging.info("=== INICIANDO EXECUÇÃO DA AUTOMAÇÃO GOOGLE DRIVE API ===")
+    logging.info("=== INICIANDO AUTOMAÇÃO DE ATUALIZAÇÃO DE PLANILHAS ===")
     logging.info("=========================================================")
 
-    config.PATH_LOCAL_TEMP.mkdir(exist_ok=True)
+    df_selic_calculada = buscar_e_calcular_selic()
+
+    if df_selic_calculada is None:
+        raise Exception("Busca de dados da Selic falhou.")
+
+    if not houve_atualizacao_selic(df_selic_calculada):
+        logging.info(
+            "Execução interrompida, pois não há novos dados. Próxima tentativa agendada."
+        )
+        logging.info("=========================================================")
+        return
 
     drive_service = gdm.get_drive_service(config.PATH_CREDENTIALS)
+
     if not drive_service:
         raise Exception("Falha na autenticação com Google Drive.")
 
-    logging.info(
-        f"--- EXECUTANDO EM MODO: {'DESENVOLVIMENTO' if config.MODO_DESENVOLVIMENTO else 'PRODUÇÃO'} ---"
-    )
+    nome_pasta_timestamp = datetime.now().strftime("%Y.%m.%d_%H%M%S")
 
-    nome_pasta_backup = datetime.now().strftime("%Y.%m.%d_%H%M%S")
-    path_backup_dia_local = config.PATH_LOCAL_BACKUP_BASE / nome_pasta_backup
-    path_backup_dia_local.mkdir(parents=True, exist_ok=True)
-    logging.info(f"Pasta de backup local criada em '{path_backup_dia_local}'.")
+    path_backup_puro_dia = config.PATH_LOCAL_BACKUP_PURO / nome_pasta_timestamp
+    path_backup_puro_dia.mkdir(parents=True, exist_ok=True)
+    logging.info(f"Pasta de backup puro criada em: '{path_backup_puro_dia}'")
+
+    path_atualizadas_dia = (
+        config.PATH_LOCAL_PLANILHAS_ATUALIZADAS / nome_pasta_timestamp
+    )
+    path_atualizadas_dia.mkdir(parents=True, exist_ok=True)
+    logging.info(f"Pasta para planilhas atualizadas criada em: '{path_atualizadas_dia}")
 
     arquivos_no_drive = gdm.list_files(
         drive_service, config.FOLDER_ID_ORIGINAL, config.SHARED_DRIVE_ID
     )
+
     if not arquivos_no_drive:
-        logging.warning("Nenhum arquivo encontrado. Finalizando...")
+        logging.warning(
+            "Nenhum arquivo encontrado na pasta de origem do Drive. finalizando"
+        )
         return
 
-    logging.info(f"Baixando {len(arquivos_no_drive)} arquivos...")
+    logging.info(
+        f"Baixando {len(arquivos_no_drive)} arquivos para as duas pastas de destino..."
+    )
+
     for arquivo in arquivos_no_drive:
-        caminho_local_destino = path_backup_dia_local / arquivo["name"]
-        gdm.download_file(drive_service, arquivo["id"], caminho_local_destino)
+        caminho_backup_puro = path_backup_puro_dia / arquivo["name"]
+        gdm.download_file(drive_service, arquivo["id"], caminho_backup_puro)
+
+        caminho_para_atualizar = path_atualizadas_dia / arquivo["name"]
+        gdm.download_file(drive_service, arquivo["id"], caminho_para_atualizar)
+
     logging.info("Download de todos os arquivos concluído.")
 
-    df_selic_calculada = buscar_e_calcular_selic()
-    if df_selic_calculada is None:
-        raise Exception("Busca de dados da Selic falhou.")
+    logging.info("Iniciando a atualização das planilhas de destino...")
 
     atualizar_todas_planilhas(
-        pasta_alvo=path_backup_dia_local,
+        pasta_alvo=path_atualizadas_dia,
         df_selic=df_selic_calculada,
         nome_aba=config.NOME_ABA_SELIC,
     )
 
     logging.info("=== EXECUÇÃO CONCLUÍDA COM SUCESSO ===")
-    logging.info(f"As planilhas modificadas estão na pasta: '{path_backup_dia_local}'")
+    logging.info(f"Backup puro salvo em: '{path_backup_puro_dia}'")
+    logging.info(f"Planilhas atualizadas salvas em: '{path_atualizadas_dia}'")
 
 
 if __name__ == "__main__":
