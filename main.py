@@ -41,7 +41,9 @@ def run():
     path_backup_puro_dia.mkdir(parents=True, exist_ok=True)
     path_atualizadas_dia.mkdir(parents=True, exist_ok=True)
     logging.info(f"Pasta de backup puro criada em: '{path_backup_puro_dia}'")
-    logging.info(f"Pasta para planilhas atualizadas criada em: '{path_atualizadas_dia}")
+    logging.info(
+        f"Pasta para planilhas atualizadas criada em: '{path_atualizadas_dia}'"
+    )
 
     arquivos_no_drive = gdm.list_files(
         drive_service, config.FOLDER_ID_ORIGINAL, config.SHARED_DRIVE_ID
