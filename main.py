@@ -2,79 +2,14 @@
 
 import logging
 import traceback
-
-from django import conf
-import config
-import pandas as pd
-import os
 from datetime import datetime
+import config
 import google_drive_manager as gdm
 from selic_processor import buscar_e_calcular_selic
 from excel_updater import atualizar_todas_planilhas
 from email_notifier import enviar_email_de_erro
-
-
-def setup_logging():
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s - %(levelname)s - %(message)s",
-        handlers=[
-            logging.FileHandler(config.PATH_ARQUIVO_LOG, mode="a"),
-            logging.StreamHandler(),
-        ],
-    )
-
-
-def houve_atualizacao_selic(df_selic_novo):
-    try:
-        pastas_backup = sorted(
-            [p for p in config.PATH_LOCAL_BACKUP_PURO.iterdir() if p.is_dir()],
-            key=os.path.getmtime,
-            reverse=True,
-        )
-
-        if not pastas_backup:
-            logging.info(
-                "Nenhum backup anterior encontrado. Prosseguindo com a primeira execução."
-            )
-            return True
-
-        path_ultimo_backup = pastas_backup[0]
-        logging.info(
-            f"Verificando atualizações em relação ao último backup: {path_ultimo_backup.name}"
-        )
-
-        primeiro_arquivo_antigo = next(path_ultimo_backup.glob("*.xls*"), None)
-        if not primeiro_arquivo_antigo:
-            logging.warning(
-                "Última pasta de backup está vazia. Considerando que há atualização."
-            )
-            return True
-
-        df_selic_antigo = pd.read_excel(
-            primeiro_arquivo_antigo, sheet_name=config.NOME_ABA_SELIC, skiprows=2
-        )
-        df_selic_antigo.rename(
-            columns={"Mês/Ano": "Mês/Ano", "Selic Acumulada": "Selic Acumulada"},
-            inplace=True,
-        )
-
-        if df_selic_novo.round(6).equals(df_selic_antigo.round(6)):
-            logging.warning(
-                "VERIFICAÇÃO: Nenhuma atualização nos dados da Selic foi encontrada."
-            )
-            return False
-
-        else:
-            logging.info(
-                "VERIFICAÇÃO: Novos dados da Selic encontrados. A atualização irá continuar."
-            )
-            return True
-
-    except Exception as e:
-        logging.error(
-            f"Erro ao verificar atualizações: {e}. Prosseguindo com a atualização por segurança."
-        )
+from logger_config import setup_logging
+from update_checker import houve_atualizacao_selic
 
 
 def run():
@@ -87,11 +22,10 @@ def run():
     if df_selic_calculada is None:
         raise Exception("Busca de dados da Selic falhou.")
 
-    if not houve_atualizacao_selic(df_selic_calculada):
+    if not houve_atualizacao_selic(df_selic_calculada.copy()):
         logging.info(
             "Execução interrompida, pois não há novos dados. Próxima tentativa agendada."
         )
-        logging.info("=========================================================")
         return
 
     drive_service = gdm.get_drive_service(config.PATH_CREDENTIALS)
@@ -100,15 +34,13 @@ def run():
         raise Exception("Falha na autenticação com Google Drive.")
 
     nome_pasta_timestamp = datetime.now().strftime("%Y.%m.%d_%H%M%S")
-
     path_backup_puro_dia = config.PATH_LOCAL_BACKUP_PURO / nome_pasta_timestamp
-    path_backup_puro_dia.mkdir(parents=True, exist_ok=True)
-    logging.info(f"Pasta de backup puro criada em: '{path_backup_puro_dia}'")
-
     path_atualizadas_dia = (
         config.PATH_LOCAL_PLANILHAS_ATUALIZADAS / nome_pasta_timestamp
     )
+    path_backup_puro_dia.mkdir(parents=True, exist_ok=True)
     path_atualizadas_dia.mkdir(parents=True, exist_ok=True)
+    logging.info(f"Pasta de backup puro criada em: '{path_backup_puro_dia}'")
     logging.info(f"Pasta para planilhas atualizadas criada em: '{path_atualizadas_dia}")
 
     arquivos_no_drive = gdm.list_files(
@@ -126,16 +58,15 @@ def run():
     )
 
     for arquivo in arquivos_no_drive:
-        caminho_backup_puro = path_backup_puro_dia / arquivo["name"]
-        gdm.download_file(drive_service, arquivo["id"], caminho_backup_puro)
-
-        caminho_para_atualizar = path_atualizadas_dia / arquivo["name"]
-        gdm.download_file(drive_service, arquivo["id"], caminho_para_atualizar)
-
+        gdm.download_file(
+            drive_service, arquivo["id"], path_backup_puro_dia / arquivo["name"]
+        )
+        gdm.download_file(
+            drive_service, arquivo["id"], path_atualizadas_dia / arquivo["name"]
+        )
     logging.info("Download de todos os arquivos concluído.")
 
     logging.info("Iniciando a atualização das planilhas de destino...")
-
     atualizar_todas_planilhas(
         pasta_alvo=path_atualizadas_dia,
         df_selic=df_selic_calculada,
