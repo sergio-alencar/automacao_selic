@@ -1,32 +1,33 @@
 # AutomacaoSelic/config.py
 
+import os
 from pathlib import Path
+from dotenv import load_dotenv
+
+load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parent
 
-MODO_DESENVOLVIMENTO = True
+MODO_DESENVOLVIMENTO = os.getenv("MODO_DESENVOLVIMENTO", "True").lower() in (
+    "true",
+    "1",
+    "t",
+)
 
-NOME_ABA_SELIC = "SELIC ACUMULADA"
+NOME_ABA_SELIC = os.getenv("NOME_ABA_SELIC", "SELIC_ACUMULADA")
+SHARED_DRIVE_ID = os.getenv("SHARED_DRIVE_ID")
+FOLDER_ID_ORIGINAL = os.getenv("FOLDER_ID_ORIGINAL")
+
 PATH_CREDENTIALS = BASE_DIR / "credentials.json"
 PATH_ARQUIVO_LOG = BASE_DIR / "execution_log.log"
+PATH_LOCAL_TEMP = BASE_DIR / "temp_files"
 
-SHARED_DRIVE_ID = "0AGj3IQTkqQIAUk9PVA"
-FOLDER_ID_ORIGINAL_PROD = "13kYv27L8wEO4koNFy9fBd2e9wBPY-aVk"
-FOLDER_ID_BACKUP_BASE_PROD = Path(
-    r"C:\Users\Administrator\Desktop\BACKUP - COMPENSACAO\Backups_Desenvolvimento"
-)
-
-FOLDER_ID_ORIGINAL_DEV = FOLDER_ID_ORIGINAL_PROD
-FOLDER_ID_BACKUP_BASE_DEV = FOLDER_ID_BACKUP_BASE_PROD
-
-PATH_LOCAL_BACKUP_BASE = Path(
-    r"C:\Users\Administrator\Desktop\BACKUP - COMPENSACAO\Backups_Desenvolvimento"
-)
+path_str = os.getenv("PATH_LOCAL_BACKUP_BASE")
+PATH_LOCAL_BACKUP_BASE = Path(path_str) if path_str else None
 
 EMAIL_CONFIG = {
-    "servidor_smtp": "smtp.gmail.com",
-    "porta": 587,
-    "usuario": "sergio.alencar@msladvocacia.com.br",
-    "senha": "eyhx sxlh dvdq bjan",
+    "servidor_smtp": os.getenv("EMAIL_HOST"),
+    "porta": int(os.getenv("EMAIL_PORT", 587)),
+    "usuario": os.getenv("EMAIL_USER"),
+    "senha": os.getenv("EMAIL_PASSWORD"),
 }
-EMAIL_DESTINATARIO_ALERTA = "sergio.alencar@msladvocacia.com.br"
