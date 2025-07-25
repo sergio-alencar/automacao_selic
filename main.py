@@ -10,6 +10,7 @@ from excel_updater import atualizar_todas_planilhas
 from email_notifier import enviar_email_de_erro
 from logger_config import setup_logging
 from update_checker import houve_atualizacao_selic
+from excel_recalculator import recalcular_e_salvar_pasta
 
 
 def run():
@@ -74,6 +75,8 @@ def run():
         df_selic=df_selic_calculada,
         nome_aba=config.NOME_ABA_SELIC,
     )
+
+    recalcular_e_salvar_pasta(path_atualizadas_dia)
 
     logging.info("=== EXECUÇÃO CONCLUÍDA COM SUCESSO ===")
     logging.info(f"Backup puro salvo em: '{path_backup_puro_dia}'")
