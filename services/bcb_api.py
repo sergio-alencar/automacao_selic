@@ -1,19 +1,44 @@
-from urllib import response
-
-from click import Option
-import pandas as pd
-import requests
 import logging
-from typing import Optional, List, Dict, Any
+import requests
+import pandas as pd
 from datetime import datetime
+from typing import Optional, List, Dict, Any, Tuple
+
 from config.constants import APIConfig, DateFormats
 
+PARAM_FORMAT_KEY: str = "formato"
+PARAM_FORMAT_VAL: str = "json"
+PARAM_START_DATE: str = "dataInicial"
+PARAM_END_DATE: str = "dataFinal"
 
-def _fetch_batch(start_str: str, end_str) -> Optional[List[Dict[str, Any]]]:
+
+def _generate_date_batches(start_date: datetime, end_date: datetime) -> List[Tuple[str, str]]:
+    date_periods: pd.DatetimeIndex = pd.date_range(
+        start=start_date,
+        end=end_date,
+        freq=APIConfig.BATCH_FREQ,
+    )
+
+    batches: List[Tuple[str, str]] = []
+
+    for i, period_start in enumerate(date_periods):
+        if i + 1 < len(date_periods):
+            period_end: pd.Timestamp = date_periods[i + 1] - pd.Timedelta(days=1)
+        else:
+            period_end = pd.Timestamp(end_date)
+
+        start_str: str = period_start.strftime(DateFormats.API)
+        end_str: str = period_end.strftime(DateFormats.API)
+        batches.append((start_str, end_str))
+
+    return batches
+
+
+def _fetch_batch(start_str: str, end_str: str) -> Optional[List[Dict[str, Any]]]:
     params: Dict[str, str] = {
-        "formato": "json",
-        "dataInicial": start_str,
-        "dataFinal": end_str,
+        PARAM_FORMAT_KEY: PARAM_FORMAT_VAL,
+        PARAM_START_DATE: start_str,
+        PARAM_END_DATE: end_str,
     }
 
     try:
@@ -33,25 +58,13 @@ def _fetch_batch(start_str: str, end_str) -> Optional[List[Dict[str, Any]]]:
 def fetch_raw_selic_data() -> Optional[pd.DataFrame]:
     logging.info("Starting daily Selic data fetch in batches...")
 
-    start_date: pd.Timestamp = pd.to_datetime(APIConfig.START_DATE)
+    start_date: datetime = pd.to_datetime(APIConfig.START_DATE).to_pydatetime()
     end_date: datetime = datetime.now()
-    date_periods: pd.DatetimeIndex = pd.date_range(
-        start=start_date,
-        end=end_date,
-        freq=APIConfig.BATCH_FREQ,
-    )
 
+    batches: List[Tuple[str, str]] = _generate_date_batches(start_date, end_date)
     all_dataframes: List[pd.DataFrame] = []
 
-    for i, period_start in enumerate(date_periods):
-        if i + 1 < len(date_periods):
-            period_end: pd.Timestamp = date_periods[i + 1] - pd.Timedelta(days=1)
-        else:
-            period_end = pd.Timestamp(end_date)
-
-        start_str: str = period_start.strftime(DateFormats.API_AND_PANDAS)
-        end_str: str = period_end.strftime(DateFormats.API_AND_PANDAS)
-
+    for start_str, end_str in batches:
         logging.info(f"Fetching data batch: {start_str} to {end_str}...")
 
         batch_data: Optional[List[Dict[str, Any]]] = _fetch_batch(start_str, end_str)

@@ -1,15 +1,11 @@
-from typing import Any, Tuple, Optional, List, Dict
-from googleapiclient.discovery import build  # type: ignore
-from google.oauth2.service_account import Credentials  # type: ignore
+from typing import Any, Tuple, Optional, List, Dict, Final
 from config import settings
 from config.constants import DriveConfig
+from services.drive_manager import get_drive_service
 
-
-def get_drive_service() -> Any:
-    creds = Credentials.from_service_account_file(
-        settings.CREDENTIALS_PATH, scopes=DriveConfig.SCOPES_FULL
-    )
-    return build("drive", "v3", credentials=creds)
+DRIVE_CORPORA: Final[str] = "drive"
+API_FIELDS_TO_RETURN: Final[str] = "files(id, name)"
+PATH_SEPARATOR: Final[str] = "/"
 
 
 def _get_shared_drive_id(service: Any, shared_drive_name: str) -> Optional[str]:
@@ -24,9 +20,14 @@ def _get_shared_drive_id(service: Any, shared_drive_name: str) -> Optional[str]:
     return drive_id
 
 
-def _traverse_folder_path(service: Any, shared_drive_id: str, folder_path: str) -> Optional[str]:
+def _traverse_folder_path(
+    service: Any,
+    shared_drive_id: str,
+    folder_path: str,
+) -> Optional[str]:
     current_id: str = shared_drive_id
-    path_parts: List[str] = [part for part in folder_path.split("/") if part]
+
+    path_parts: List[str] = [part for part in folder_path.split(PATH_SEPARATOR) if part]
 
     for part in path_parts:
         query: str = (
@@ -38,11 +39,11 @@ def _traverse_folder_path(service: Any, shared_drive_id: str, folder_path: str) 
             service.files()
             .list(
                 q=query,
-                corpora="drive",
+                corpora=DRIVE_CORPORA,
                 driveId=shared_drive_id,
                 includeItemsFromAllDrives=True,
                 supportsAllDrives=True,
-                fields="files(id, name)",
+                fields=API_FIELDS_TO_RETURN,
             )
             .execute()
         )
@@ -60,7 +61,9 @@ def _traverse_folder_path(service: Any, shared_drive_id: str, folder_path: str) 
 
 
 def find_folder_ids(
-    service: Any, shared_drive_name: str, folder_path: str
+    service: Any,
+    shared_drive_name: str,
+    folder_path: str,
 ) -> Tuple[Optional[str], Optional[str]]:
     try:
         shared_drive_id = _get_shared_drive_id(service, shared_drive_name)
@@ -77,7 +80,7 @@ def find_folder_ids(
 
 
 if __name__ == "__main__":
-    service: Any = get_drive_service()
+    service: Any = get_drive_service(settings.CREDENTIALS_PATH)
     print("\n--- Google Drive Folder ID Finder ---")
 
     drive_name_input: str = input(
