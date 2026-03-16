@@ -1,15 +1,13 @@
-# AutomacaoSelic/logger_config.py
-
 import logging
-import config
+from config.settings import LOG_FILE_PATH
 
 
-def setup_logging():
+def setup_logging() -> None:
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s - %(levelname)s - %(message)s",
         handlers=[
-            logging.FileHandler(config.PATH_ARQUIVO_LOG, mode="a"),
+            logging.FileHandler(LOG_FILE_PATH, mode="a"),
             logging.StreamHandler(),
         ],
     )

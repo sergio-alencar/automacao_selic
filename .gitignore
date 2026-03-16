@@ -16,3 +16,4 @@ build/
 Thumbs.db
 credentials.json
 temp_files/
+tests/

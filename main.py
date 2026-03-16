@@ -1,86 +1,97 @@
-# AutomacaoSelic/main.py
-
 import logging
 import traceback
+import pandas as pd
 from datetime import datetime
-import config
-import google_drive_manager as gdm
-from selic_processor import buscar_e_calcular_selic
-from excel_updater import atualizar_todas_planilhas
-from email_notifier import enviar_email_de_erro
-from logger_config import setup_logging
-from update_checker import houve_atualizacao_selic
-from excel_recalculator import recalcular_e_salvar_pasta
+from pathlib import Path
+from typing import Any, List, Dict, Optional
+
+from config import settings
+from config.logger import setup_logging
+from services import bcb_api, drive_manager, email_notifier
+from core import calculator, update_validator
+from excel import updater, recalculator
 
 
-def run():
-    logging.info("=========================================================")
-    logging.info("=== INICIANDO AUTOMAÇÃO DE ATUALIZAÇÃO DE PLANILHAS ===")
-    logging.info("=========================================================")
+def run() -> None:
+    logging.info("=" * 60)
+    logging.info("=== STARTING SPREADSHEET UPDATE AUTOMATION ===")
+    logging.info("=" * 60)
 
-    df_selic_calculada = buscar_e_calcular_selic()
+    raw_selic_data: Optional[pd.DataFrame] = bcb_api.fetch_raw_selic_data()
 
-    if df_selic_calculada is None:
-        raise Exception("Busca de dados da Selic falhou.")
+    if raw_selic_data is None:
+        raise Exception("Selic data fetch failed.")
 
-    if not houve_atualizacao_selic(df_selic_calculada.copy()):
+    calculated_selic_df: pd.DataFrame = calculator.calculate_accumulated_selic(
+        raw_selic_data
+    )
+
+    if not update_validator.has_selic_updated(calculated_selic_df.copy()):
         logging.info(
-            "Execução interrompida, pois não há novos dados. Próxima tentativa agendada."
+            "Execution stopped as there is no new data. Scheduled for next attempt."
         )
         return
 
-    drive_service = gdm.get_drive_service(config.PATH_CREDENTIALS)
+    drive_service: Any = drive_manager.get_drive_service(
+        settings.CREDENTIALS_PATH
+    )
 
     if not drive_service:
-        raise Exception("Falha na autenticação com Google Drive.")
+        raise Exception("Failed to authenticate with Google Drive.")
 
-    nome_pasta_timestamp = datetime.now().strftime("%Y.%m.%d_%H%M%S")
-    path_backup_puro_dia = config.PATH_LOCAL_BACKUP_PURO / nome_pasta_timestamp
-    path_atualizadas_dia = (
-        config.PATH_LOCAL_PLANILHAS_ATUALIZADAS / nome_pasta_timestamp
-    )
-    path_backup_puro_dia.mkdir(parents=True, exist_ok=True)
-    path_atualizadas_dia.mkdir(parents=True, exist_ok=True)
-    logging.info(f"Pasta de backup puro criada em: '{path_backup_puro_dia}'")
-    logging.info(
-        f"Pasta para planilhas atualizadas criada em: '{path_atualizadas_dia}'"
+    timestamp_folder: str = datetime.now().strftime("%Y.%m.%d_%H%M%S")
+    pure_backup_path: Path = settings.LOCAL_BACKUP_PATH / timestamp_folder
+    updated_sheets_path: Path = (
+        settings.LOCAL_UPDATED_SHEETS_PATH / timestamp_folder
     )
 
-    arquivos_no_drive = gdm.list_files(
-        drive_service, config.FOLDER_ID_ORIGINAL, config.SHARED_DRIVE_ID
+    pure_backup_path.mkdir(parents=True, exist_ok=True)
+    updated_sheets_path.mkdir(parents=True, exist_ok=True)
+
+    logging.info(f"Pure backup folder created at: '{pure_backup_path}'")
+    logging.info(f"Updated sheets folder created at: '{updated_sheets_path}'")
+
+    drive_files: List[Dict[str, str]] = drive_manager.list_excel_files(
+        service=drive_service,
+        parent_folder_id=settings.ORIGINAL_FOLDER_ID,
+        shared_drive_id=settings.SHARED_DRIVE_ID,
     )
 
-    if not arquivos_no_drive:
-        logging.warning(
-            "Nenhum arquivo encontrado na pasta de origem do Drive. finalizando"
-        )
+    if not drive_files:
+        logging.warning("No files found in the source Drive folder. Finishing.")
         return
 
     logging.info(
-        f"Baixando {len(arquivos_no_drive)} arquivos para as duas pastas de destino..."
+        f"Downloading {len(drive_files)} files to destination folders..."
     )
 
-    for arquivo in arquivos_no_drive:
-        gdm.download_file(
-            drive_service, arquivo["id"], path_backup_puro_dia / arquivo["name"]
+    for file_info in drive_files:
+        drive_manager.download_file(
+            service=drive_service,
+            file_id=file_info["id"],
+            local_path=pure_backup_path / file_info["name"],
         )
-        gdm.download_file(
-            drive_service, arquivo["id"], path_atualizadas_dia / arquivo["name"]
+        drive_manager.download_file(
+            service=drive_service,
+            file_id=file_info["id"],
+            local_path=updated_sheets_path / file_info["name"],
         )
-    logging.info("Download de todos os arquivos concluído.")
 
-    logging.info("Iniciando a atualização das planilhas de destino...")
-    atualizar_todas_planilhas(
-        pasta_alvo=path_atualizadas_dia,
-        df_selic=df_selic_calculada,
-        nome_aba=config.NOME_ABA_SELIC,
+    logging.info("All files downloaded successfully.")
+
+    logging.info("Starting destination spreadsheets update...")
+
+    updater.update_all_worksheets(
+        target_folder=updated_sheets_path,
+        selic_df=calculated_selic_df,
+        sheet_name=settings.SELIC_SHEET_NAME,
     )
 
-    recalcular_e_salvar_pasta(path_atualizadas_dia)
+    recalculator.recalculate_and_save_folder(updated_sheets_path)
 
-    logging.info("=== EXECUÇÃO CONCLUÍDA COM SUCESSO ===")
-    logging.info(f"Backup puro salvo em: '{path_backup_puro_dia}'")
-    logging.info(f"Planilhas atualizadas salvas em: '{path_atualizadas_dia}'")
+    logging.info("=== EXECUTION COMPLETED SUCCESSFULLY ===")
+    logging.info(f"Pure backup saved at: '{pure_backup_path}'")
+    logging.info(f"Updated sheets saved at: '{updated_sheets_path}'")
 
 
 if __name__ == "__main__":
@@ -90,17 +101,24 @@ if __name__ == "__main__":
         run()
 
     except Exception as e:
-        logging.error("!!!!!! UMA FALHA CRÍTICA OCORREU !!!!!!")
+        logging.error("!!!!!! A CRITICAL FAILURE OCCURRED !!!!!!")
         logging.error(traceback.format_exc())
 
-        assunto = "ALERTA: Falha na execução do robô atualizador de planilhas Selic"
-        corpo = (
-            "Ocorreu um erro crítico durante a execução do script de atualização da Selic.\n\n"
-            "Por favor, verifique o arquivo de log para mais detalhes.\n\n"
-            "==================== MENSAGEM DE ERRO ====================\n"
+        subject: str = (
+            "ALERT: Failure in Selic spreadsheet updater robot execution"
+        )
+        body: str = (
+            "A critical error occurred during the Selic update script execution.\n\n"
+            "Please check the log file for more details.\n\n"
+            "==================== ERROR MESSAGE ====================\n"
             f"{traceback.format_exc()}"
         )
-        enviar_email_de_erro(
-            assunto, corpo, config.EMAIL_DESTINATARIO_ALERTA, config.EMAIL_CONFIG
+
+        email_notifier.send_alert_email(
+            subject=subject,
+            body=body,
+            recipient=settings.ALERT_EMAIL_RECIPIENT,
+            config=settings.EMAIL_CONFIG,
         )
-        logging.error("===================================================")
+
+        logging.error("=" * 50)
